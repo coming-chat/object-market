@@ -1,0 +1,10 @@
+[package]
+name = "object-market"
+version = "0.1.0"
+
+[dependencies]
+#Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "testnet" }
+Sui = { local = "../sui/crates/sui-framework" }
+
+[addresses]
+object_market = "0x0"
