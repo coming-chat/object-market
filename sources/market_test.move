@@ -158,7 +158,7 @@ module object_market::market_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = 2)]
     fun fail_to_buy() {
         let begin = test_scenario::begin(ADMIN);
         let scenario = &mut begin;

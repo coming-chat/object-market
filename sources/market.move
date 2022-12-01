@@ -25,7 +25,7 @@ module object_market::market {
     // For when someone tries to delist without ownership.
     const ERR_NOT_OWNER: u64 = 1;
     // For when amount paid does not match the expected.
-    const ERR_AMOUNT_INCORRECT: u64 = 0;
+    const ERR_AMOUNT_INCORRECT: u64 = 2;
 
     // ======= Types =======
 
