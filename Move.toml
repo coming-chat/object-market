@@ -8,3 +8,5 @@ Sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
 object_market = "0x0"
+# TODO: replace real beneficiary
+beneficiary = "0xf15b467c66c983310d3966e84bdf0c399963842c"

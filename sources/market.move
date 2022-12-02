@@ -13,14 +13,19 @@
 ///                       \+---(index #N)--> Listing<T2,C2>(Item, Price...)
 /// ```
 module object_market::market {
-    use sui::object::{Self, UID, ID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use sui::event::emit;
-    use sui::coin::{Self, Coin};
     use std::ascii::String;
     use std::type_name::{into_string, get};
+
+    use sui::balance::{Self, Balance, zero};
+    use sui::coin::{Self, Coin};
+    use sui::event::emit;
+    use sui::object::{Self, UID, ID};
     use sui::object_table::{Self, ObjectTable};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+
+    // 2.5% = 250/10000
+    const FEE_POINT: u8 = 250;
 
     // For when someone tries to delist without ownership.
     const ERR_NOT_OWNER: u64 = 1;
@@ -38,6 +43,8 @@ module object_market::market {
     struct ObjectMarket<T: key + store, phantom C> has key {
         id: UID,
         next_index: u64,
+        beneficiary: address,
+        fee: Balance<C>,
         items: ObjectTable<u64, Listing<T, C>>
     }
 
@@ -96,9 +103,10 @@ module object_market::market {
 
     #[test_only]
     public fun create_market_for_testing<T: key + store, C>(
+        beneficiary: address,
         ctx: &mut TxContext
     ) {
-        publish<T, C>(ctx)
+        publish<T, C>(ctx, beneficiary)
     }
 
     /// Admin-only method which allows market creation.
@@ -106,13 +114,16 @@ module object_market::market {
         _: &MarketManagerCap,
         ctx: &mut TxContext
     ) {
-        publish<T, C>(ctx)
+        publish<T, C>(ctx, @beneficiary)
     }
 
     /// Create and share a new `ObjectMarket` for the type `T`. Method is private
     /// and can only be called in the module initializer or in the admin-only
     /// method `create_market`.
-    fun publish<T: key + store, C>(ctx: &mut TxContext) {
+    fun publish<T: key + store, C>(
+        ctx: &mut TxContext,
+        beneficiary: address
+    ) {
         let id = object::new(ctx);
         emit(MarketCreated<T, C> {
             market_id: object::uid_to_inner(&id),
@@ -123,6 +134,8 @@ module object_market::market {
             ObjectMarket<T, C> {
                 id,
                 next_index: 0,
+                beneficiary,
+                fee: zero<C>(),
                 items: object_table::new<u64, Listing<T, C>>(ctx)
             }
         );
@@ -217,8 +230,17 @@ module object_market::market {
             new_owner
         });
 
+        // handle 2.5% fee
+        let fee = coin::value(&paid) / 10000 * (FEE_POINT as u64);
+        if (fee > 0) {
+            let fee_balance = coin::into_balance(coin::split(&mut paid, fee, ctx));
+            balance::join(&mut market.fee, fee_balance);
+        };
+
         transfer::transfer(paid, owner);
+
         object::delete(id);
+
         item
     }
 
@@ -245,5 +267,24 @@ module object_market::market {
         let listing = object_table::borrow<u64, Listing<T, C>>(&market.items, *&item_index);
         let coin = coin::split(paid, listing.price, ctx);
         purchase_and_take(market, item_index, coin, ctx)
+    }
+
+    /// Withdraw fee coins by beneficiary
+    public entry fun withdraw<T: key + store, C>(
+        market: &mut ObjectMarket<T, C>,
+        ctx: &mut TxContext
+    ) {
+        assert!(
+            market.beneficiary == tx_context::sender(ctx),
+            ERR_NOT_OWNER
+        );
+
+        let fee = balance::value(&market.fee);
+        let fee_balance = balance::split<C>(&mut market.fee, fee);
+
+        transfer::transfer(
+            coin::from_balance(fee_balance, ctx),
+            tx_context::sender(ctx)
+        )
     }
 }

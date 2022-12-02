@@ -1,15 +1,13 @@
 // Copyright 2022 ComingChat Authors. Licensed under Apache-2.0 License.
 #[test_only]
 module object_market::market_tests {
-    use sui::test_scenario::{Self, Scenario};
     use sui::coin::{Self, Coin};
-    use sui::sui::SUI;
     use sui::object::{Self, UID};
+    use sui::sui::SUI;
+    use sui::test_scenario::{Self, Scenario};
     use sui::transfer;
 
-    use object_market::market::{
-        Self, ObjectMarket
-    };
+    use object_market::market::{Self, ObjectMarket};
 
     // Simple Dmens-NFT data structure.
     struct Dmens has key, store {
@@ -18,7 +16,7 @@ module object_market::market_tests {
     }
 
     fun burn_dmens(dmens: Dmens): u8 {
-        let Dmens{ id, data } = dmens;
+        let Dmens { id, data } = dmens;
         object::delete(id);
         data
     }
@@ -26,11 +24,13 @@ module object_market::market_tests {
     const ADMIN: address = @0xA55;
     const SELLER: address = @0x00A;
     const BUYER: address = @0x00B;
+    const BENEFICIARY: address = @0x00C;
 
     /// Create a shared ObjectMarket.
     fun create_marketplace(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, ADMIN);
         market::create_market_for_testing<Dmens, SUI>(
+            BENEFICIARY,
             test_scenario::ctx(scenario)
         );
     }
@@ -39,7 +39,7 @@ module object_market::market_tests {
     fun mint_some_coin(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, ADMIN);
         let coin = coin::mint_for_testing<SUI>(
-            1000,
+            100000,
             test_scenario::ctx(scenario)
         );
         transfer::transfer(coin, BUYER);
@@ -52,13 +52,13 @@ module object_market::market_tests {
         transfer::transfer(nft, SELLER);
     }
 
-    // SELLER lists Dmens at the ObjectMarket for 100 SUI.
+    // SELLER lists Dmens at the ObjectMarket for 10000 SUI.
     fun list_dmens(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, SELLER);
         let obj_mkt = test_scenario::take_shared<ObjectMarket<Dmens, SUI>>(scenario);
         let nft = test_scenario::take_from_sender<Dmens>(scenario);
 
-        market::list<Dmens, SUI>(&mut obj_mkt, nft, 100, test_scenario::ctx(scenario));
+        market::list<Dmens, SUI>(&mut obj_mkt, nft, 10000, test_scenario::ctx(scenario));
 
         test_scenario::return_shared(obj_mkt);
     }
@@ -132,12 +132,12 @@ module object_market::market_tests {
         mint_dmens(scenario);
         list_dmens(scenario);
 
-        // BUYER takes 100 SUI from his wallet and purchases Dmens.
+        // BUYER takes 10000 SUI from his wallet and purchases Dmens.
         test_scenario::next_tx(scenario, BUYER);
         {
             let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
             let obj_mkt = test_scenario::take_shared<ObjectMarket<Dmens, SUI>>(scenario);
-            let payment = coin::take(coin::balance_mut(&mut coin), 100, test_scenario::ctx(scenario));
+            let payment = coin::take(coin::balance_mut(&mut coin), 10000, test_scenario::ctx(scenario));
 
             // Do the buy call and expect successful purchase.
             let nft = market::purchase<Dmens, SUI>(
@@ -154,6 +154,30 @@ module object_market::market_tests {
             test_scenario::return_to_sender(scenario, coin);
         };
 
+        test_scenario::next_tx(scenario, BENEFICIARY);
+        {
+            let obj_mkt = test_scenario::take_shared<ObjectMarket<Dmens, SUI>>(scenario);
+
+            // withdraw fee
+            market::withdraw<Dmens, SUI>(
+                &mut obj_mkt,
+                test_scenario::ctx(scenario)
+            );
+
+            test_scenario::return_shared(obj_mkt);
+        };
+
+        test_scenario::next_tx(scenario, BENEFICIARY);
+        {
+            let obj_mkt = test_scenario::take_shared<ObjectMarket<Dmens, SUI>>(scenario);
+
+            let fee_coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+            assert!(coin::value(&fee_coin) == 250, 1);
+
+            test_scenario::return_shared(obj_mkt);
+            test_scenario::return_to_sender(scenario, fee_coin);
+        };
+
         test_scenario::end(begin);
     }
 
@@ -168,13 +192,13 @@ module object_market::market_tests {
         mint_dmens(scenario);
         list_dmens(scenario);
 
-        // BUYER takes 100 SUI from his wallet and purchases Dmens.
+        // BUYER takes 10000 SUI from his wallet and purchases Dmens.
         test_scenario::next_tx(scenario, BUYER);
         {
             let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
             let obj_mkt = test_scenario::take_shared<ObjectMarket<Dmens, SUI>>(scenario);
 
-            // AMOUNT here is 10 while expected is 100.
+            // AMOUNT here is 10 while expected is 10000.
             let payment = coin::take(coin::balance_mut(&mut coin), 10, test_scenario::ctx(scenario));
 
             // Attempt to buy and expect failure purchase.
