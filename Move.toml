@@ -1,12 +1,12 @@
 [package]
-name = "object-market"
-version = "0.1.0"
+name = "marketplace"
+version = "0.0.1"
 
 [dependencies]
-#Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "testnet" }
-Sui = { local = "../sui/crates/sui-framework" }
+#Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
+
+Sui = { local = "../sui/crates/sui-framework/packages/sui-framework" }
 
 [addresses]
-object_market = "0x0"
-# TODO: replace real beneficiary
-beneficiary = "0xf15b467c66c983310d3966e84bdf0c399963842c"
+marketplace =  "0x0"
+beneficiary = "0x0"
